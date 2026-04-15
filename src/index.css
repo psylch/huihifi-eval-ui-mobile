@@ -1,35 +1,224 @@
 @import "tailwindcss";
 
-/* CSS 变量与原型 HTML 对齐（Phase 2B 会补全所有变量，从 l2_product_detail.html 第 101-134 行抄） */
+/* ============================================================
+   主题 CSS 变量
+   从原型 HTML docs/huihifi-app-handoff/l2_product_detail.html
+   第 66-134 行 1:1 移植。
+   原型用 `.dark` class 切换，本项目改用 `[data-theme="dark"]`
+   以便 index.html 的 FOUC inline script 和 RN 宿主通过
+   URL 参数 / injectJavaScript 控制主题。变量名与色值完全一致。
+   ============================================================ */
 :root,
 [data-theme="light"] {
-  --bg-page: #F5F5F7;
-  --bg-panel: #FFFFFF;
-  --text-primary: #333333;
-  --text-secondary: #666666;
-  --text-tertiary: #999999;
-  --border-inner-well: #E5E5E5;
-  --accent-primary: #FF4D4D;
+  /* Light Mode Tokens (Clean & Crisp) */
+  --bg-page: #F5F7FA;
+  --bg-surface: #FFFFFF;
+  --bg-surface-highlight: #F0F2F5;
+  --bg-card: #FFFFFF;
+  --bg-input: #F0F2F5;
+
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --text-tertiary: #9CA3AF;
+
+  --border-base: rgba(0, 0, 0, 0.06);
+  --border-card: rgba(0, 0, 0, 0.06);
+
+  --shadow-glass: 0 10px 30px -10px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+
+  --ambient-gradient: radial-gradient(circle at 50% -20%, rgba(255, 59, 48, 0.06), transparent 70%);
+  --bg-noise: none;
+
+  /* Curve colors */
+  --curve-stroke: #FF3B30;
+  --curve-fill-start: rgba(255, 59, 48, 0.25);
+  --curve-fill-end: rgba(255, 59, 48, 0);
+
+  /* Glass Panel */
+  --bg-glass-panel: #FFFFFF;
+  --border-glass-panel: rgba(0, 0, 0, 0.06);
+
+  /* Inner Well (for nested cards) */
+  --bg-inner-well: #F9FAFB;
+  --border-inner-well: rgba(0, 0, 0, 0.04);
+
+  /* Accent — 语义别名，原型 HTML 全程用字面量 #FF3B30/#FF9500，
+     这里抽出来供 .bar-indicator / SubTabBar / TuningModeSelector 引用，
+     避免散落字面量。 */
+  --accent-primary: #FF3B30;
   --accent-secondary: #FF9500;
 }
 
 [data-theme="dark"] {
-  --bg-page: #1C1C1E;
-  --bg-panel: #2C2C2E;
-  --text-primary: #F5F5F7;
-  --text-secondary: #AEAEB2;
-  --text-tertiary: #8E8E93;
-  --border-inner-well: #38383A;
-  --accent-primary: #FF4D4D;
+  /* Dark Mode Tokens (Deep & Immersive) */
+  --bg-page: #050505;
+  --bg-surface: #121212;
+  --bg-surface-highlight: #1A1A1A;
+  --bg-card: #1A1A1A;
+  --bg-input: #2A2A2E;
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #98989F;
+  --text-tertiary: #3A3A3C;
+
+  --border-base: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(255, 255, 255, 0.06);
+
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  --shadow-card: none;
+
+  --ambient-gradient: radial-gradient(circle at 50% -10%, rgba(255, 59, 48, 0.2), transparent 60%);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+
+  /* Curve colors */
+  --curve-stroke: #FF3B30;
+  --curve-fill-start: rgba(255, 59, 48, 0.3);
+  --curve-fill-end: rgba(255, 59, 48, 0);
+
+  /* Glass Panel */
+  --bg-glass-panel: rgba(20, 20, 20, 0.6);
+  --border-glass-panel: rgba(255, 255, 255, 0.08);
+
+  /* Inner Well (for nested cards) */
+  --bg-inner-well: rgba(0, 0, 0, 0.4);
+  --border-inner-well: rgba(255, 255, 255, 0.05);
+
+  /* Accent — 与 light 同色（PRD 设计如此） */
+  --accent-primary: #FF3B30;
   --accent-secondary: #FF9500;
 }
 
-html, body, #root {
+/* ============================================================
+   基础样式
+   ============================================================ */
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
-  background: var(--bg-page);
+}
+
+html,
+body {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none !important;
+}
+
+body {
+  background-color: var(--bg-page);
+  background-image: var(--bg-noise), var(--ambient-gradient);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* ============================================================
+   原型自定义 utility / class
+   ============================================================ */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.tap-depth {
+  transition: transform 0.15s ease-out;
+}
+.tap-depth:active {
+  transform: scale(0.95) translateY(1px);
+  transition: transform 0s;
+}
+
+.glass-panel {
+  background: var(--bg-glass-panel);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass-panel);
+  box-shadow: var(--shadow-glass);
+}
+
+/* ============================================================
+   Bar Chart 样式（移动端核心 UI —— 条形图对比）
+   ============================================================ */
+.bar-axis {
+  height: 3px;
+  background: var(--border-base);
+  position: relative;
+}
+.bar-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.3s ease-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+.bar-indicator.filled {
+  background: var(--accent-primary);
+}
+.bar-indicator.outline {
+  background: var(--bg-surface);
+  border: 2.5px solid var(--accent-primary);
+}
+.bar-indicator.diamond {
+  width: 10px;
+  height: 10px;
+  background: var(--accent-secondary);
+  border-radius: 2px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* ============================================================
+   动画
+   ============================================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.35s ease-out forwards;
+}
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
