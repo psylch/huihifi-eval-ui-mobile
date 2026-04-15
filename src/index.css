@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* CSS 变量与原型 HTML 对齐（Phase 2B 会补全所有变量，从 l2_product_detail.html 第 101-134 行抄） */
+:root,
+[data-theme="light"] {
+  --bg-page: #F5F5F7;
+  --bg-panel: #FFFFFF;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --border-inner-well: #E5E5E5;
+  --accent-primary: #FF4D4D;
+  --accent-secondary: #FF9500;
+}
+
+[data-theme="dark"] {
+  --bg-page: #1C1C1E;
+  --bg-panel: #2C2C2E;
+  --text-primary: #F5F5F7;
+  --text-secondary: #AEAEB2;
+  --text-tertiary: #8E8E93;
+  --border-inner-well: #38383A;
+  --accent-primary: #FF4D4D;
+  --accent-secondary: #FF9500;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
