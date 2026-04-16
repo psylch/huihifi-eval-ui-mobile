@@ -138,6 +138,15 @@ body {
   transition: transform 0s;
 }
 
+/* Pill-style sub tab (unselected) — light tint in both themes, mirrors
+   prototype's `bg-black/5 dark:bg-white/5`. */
+.pill-inactive {
+  background: rgba(0, 0, 0, 0.05);
+}
+[data-theme="dark"] .pill-inactive {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .glass-panel {
   background: var(--bg-glass-panel);
   backdrop-filter: blur(20px);

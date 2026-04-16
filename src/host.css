@@ -1,0 +1,23 @@
+/* index.css (imported before this file in host.tsx) already pulls in
+   tailwindcss and sets body base styles using the WebView color tokens.
+   This file is only for dev-host-specific overrides. */
+
+html,
+body {
+  /* Replace the WebView page background with a neutral dev-host bg so
+     the phone frame pops against it. */
+  background: #eef0f3;
+  /* Re-enable scrollbars — the mobile WebView hides them via
+     index.css's `scrollbar-width: none !important`, which doesn't fit
+     a desktop control panel. */
+  scrollbar-width: auto !important;
+  -ms-overflow-style: auto !important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: initial !important;
+}
+
+#host-root {
+  min-height: 100vh;
+}

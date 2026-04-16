@@ -52,7 +52,12 @@ export function TuningModeSelector({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[60]"
+      // Positions relative to the nearest positioned ancestor. In the
+      // dev-host that's PhoneFrame's inner container, so the sheet stays
+      // trapped inside the phone screen. When mounted alone on a page
+      // where no ancestor is positioned, it falls back to the initial
+      // containing block (viewport) — same effective behavior as `fixed`.
+      className="absolute inset-0 z-[60]"
       onClick={onClose}
     >
       <div
@@ -61,7 +66,7 @@ export function TuningModeSelector({
       />
 
       <div
-        className="absolute bottom-0 left-0 right-0 rounded-t-[32px] max-h-[75vh] overflow-hidden animate-slide-up"
+        className="absolute bottom-0 left-0 right-0 rounded-t-[32px] max-h-[75%] overflow-hidden animate-slide-up"
         style={{
           background: 'var(--bg-surface)',
           boxShadow: 'var(--shadow-glass)',

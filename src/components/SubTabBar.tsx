@@ -14,7 +14,7 @@ export function SubTabBar({ activeTab, onChange, availability }: SubTabBarProps)
       className="overflow-x-auto no-scrollbar -mx-5 px-5 sticky top-0 z-20 -mt-4 pt-4 pb-2 backdrop-blur-md"
       style={{ backgroundColor: 'color-mix(in srgb, var(--bg-page) 80%, transparent)' }}
     >
-      <div className="flex gap-5">
+      <div className="flex gap-2">
         {SUB_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
           const hasData = availability[tab.id] ?? true;
@@ -23,20 +23,24 @@ export function SubTabBar({ activeTab, onChange, availability }: SubTabBarProps)
               key={tab.id}
               type="button"
               onClick={() => onChange(tab.id)}
-              className="relative whitespace-nowrap py-2.5 text-[13px] transition-colors tap-depth"
-              style={{
-                color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                fontWeight: isActive ? 600 : 500,
-                opacity: hasData ? 1 : 0.4,
-              }}
+              className={`px-4 py-2 rounded-full text-[13px] whitespace-nowrap tap-depth transition-all ${
+                isActive ? '' : 'pill-inactive'
+              }`}
+              style={
+                isActive
+                  ? {
+                      background: 'var(--accent-primary)',
+                      color: '#FFFFFF',
+                      fontWeight: 600,
+                    }
+                  : {
+                      color: 'var(--text-secondary)',
+                      fontWeight: 500,
+                      opacity: hasData ? 1 : 0.4,
+                    }
+              }
             >
               {tab.label}
-              {isActive && (
-                <span
-                  className="absolute left-0 right-0 bottom-0 h-[2px] rounded-[1px]"
-                  style={{ background: 'var(--accent-primary)' }}
-                />
-              )}
             </button>
           );
         })}
