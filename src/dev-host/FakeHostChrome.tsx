@@ -17,9 +17,8 @@ interface Props {
   product: Product | null;
   activeMainTab: MainTab;
   onMainTabChange: (tab: MainTab) => void;
-  webviewUrl: string;
+  iframeKey: number;
   iframeRef: RefObject<HTMLIFrameElement | null>;
-  // 调音模式状态由宿主拥有（跨 perception / curves tab 共享）
   selectedModes: string[];
   onSelectedModesChange: (modes: string[]) => void;
 }
@@ -30,7 +29,7 @@ export function FakeHostChrome({
   product,
   activeMainTab,
   onMainTabChange,
-  webviewUrl,
+  iframeKey,
   iframeRef,
   selectedModes,
   onSelectedModesChange,
@@ -160,9 +159,9 @@ export function FakeHostChrome({
           }}
         >
           <iframe
-            key={webviewUrl}
+            key={iframeKey}
             ref={iframeRef}
-            src={webviewUrl}
+            src="/"
             className="w-full h-full border-0 block"
             title="听感数据 WebView"
           />

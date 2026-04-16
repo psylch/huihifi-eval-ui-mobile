@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchProductWithModes, PRODUCT_NOT_FOUND } from './api/client';
+import { useBridge } from './bridge';
 import { BarChart } from './components/BarChart';
 import { ErrorState } from './components/ErrorState';
 import { LoadingState } from './components/LoadingState';
 import { SubTabBar } from './components/SubTabBar';
 import { SUB_TABS, type SubTabId } from './constants';
-import { useTheme } from './hooks/useTheme';
-import { useUrlParams } from './hooks/useUrlParams';
 import type { ErrorKind, FetchResult, ModeData, ScoreItem } from './types';
 
 interface AppError {
@@ -21,20 +20,16 @@ function toAppError(e: unknown): AppError {
 }
 
 export default function App() {
-  const params = useUrlParams();
-  useTheme(params.theme);
+  const bridge = useBridge();
 
-  // `data.modes` holds every mode returned by the initial load. Mode
-  // selection is now owned by the host — we render whatever the URL
-  // asks for and never mutate it in-session.
   const [data, setData] = useState<FetchResult | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<SubTabId>(params.category);
+  const [activeCategory, setActiveCategory] = useState<SubTabId>(bridge.category);
   const [selectedModes, setSelectedModes] = useState<string[]>([]);
 
-  const initialLoad = useCallback(async () => {
-    if (!params.productId) {
+  const loadData = useCallback(async () => {
+    if (!bridge.productId) {
       setError({ kind: 'missing-param' });
       setIsLoading(false);
       return;
@@ -42,7 +37,8 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchProductWithModes(params.productId, params.modes);
+      const modes = bridge.modes.length > 0 ? bridge.modes : null;
+      const result = await fetchProductWithModes(bridge.productId, modes);
       setData(result);
       setSelectedModes(result.modes.map((m) => m.tuningMode));
     } catch (e: unknown) {
@@ -50,11 +46,18 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [params.productId, params.modes]);
+  }, [bridge.productId, bridge.modes]);
 
+  // Fetch when bridge becomes ready (init received or URL fallback)
   useEffect(() => {
-    void initialLoad();
-  }, [initialLoad]);
+    if (!bridge.isReady) return;
+    void loadData();
+  }, [bridge.isReady, loadData]);
+
+  // Sync category if bridge sends a new one (e.g. re-init)
+  useEffect(() => {
+    if (bridge.isReady) setActiveCategory(bridge.category);
+  }, [bridge.isReady, bridge.category]);
 
   const availability = useMemo<Partial<Record<SubTabId, boolean>>>(() => {
     if (!data || selectedModes.length === 0) return {};
@@ -93,7 +96,9 @@ export default function App() {
     const canonical = perMode.find((p) => p.byName.size > 0);
     if (!canonical) return [];
 
-    const canonicalMode = data.modes.find((m) => m.tuningMode === canonical.tuningMode);
+    const canonicalMode = data.modes.find(
+      (m) => m.tuningMode === canonical.tuningMode,
+    );
     const canonicalDims = canonicalMode?.scores[sheetKey] ?? [];
 
     return canonicalDims.map((canon) => ({
@@ -106,7 +111,8 @@ export default function App() {
     }));
   }, [data, activeCategory, selectedModes]);
 
-  if (isLoading) {
+  // Wait for bridge to be ready before showing anything
+  if (!bridge.isReady || isLoading) {
     return <LoadingState />;
   }
   if (error) {
@@ -114,7 +120,7 @@ export default function App() {
       <ErrorState
         kind={error.kind}
         message={error.message}
-        onRetry={error.kind === 'network' ? () => void initialLoad() : undefined}
+        onRetry={error.kind === 'network' ? () => void loadData() : undefined}
       />
     );
   }

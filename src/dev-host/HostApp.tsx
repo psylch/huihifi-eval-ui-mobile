@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { InitPayload, ThemeMode } from '../bridge';
 import { FakeHostChrome } from './FakeHostChrome';
 import { PhoneFrame } from './PhoneFrame';
 import { ProductControls } from './ProductControls';
 
-const DEFAULT_PRODUCT_ID = '7230fa92-72c5-4a8c-a369-6440413cd6c1'; // 64Audio Solo (2 模式)
+const DEFAULT_PRODUCT_ID = '7230fa92-72c5-4a8c-a369-6440413cd6c1';
 
 interface Product {
   uuid: string;
@@ -15,28 +16,24 @@ interface Product {
 
 type MainTab = 'perception' | 'curves';
 
-type Theme = 'light' | 'dark';
-
-// 运行时注入的类型签名，和 mobile WebView 的 src/hooks/useTheme.ts 对齐
-type WebViewWindow = Window & {
-  __setTheme?: (theme: Theme) => void;
-};
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+
+// iPhone 14 safe-area approximation (status bar 47, home indicator 34)
+const SAFE_AREA = { top: 47, right: 0, bottom: 34, left: 0 };
 
 export default function HostApp() {
   const [productId, setProductId] = useState(DEFAULT_PRODUCT_ID);
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedModes, setSelectedModes] = useState<string[]>([]);
   const [category, setCategory] = useState('frequency');
-  const [initialTheme, setInitialTheme] = useState<Theme>('light');
-  const [lastInjected, setLastInjected] = useState<Theme | null>(null);
+  const [theme, setTheme] = useState<ThemeMode>('light');
+  const [lastBridgeEvent, setLastBridgeEvent] = useState<string | null>(null);
   const [productError, setProductError] = useState<string | null>(null);
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('perception');
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // 拉产品详情拿 availableTuningModes
+  // Fetch product to populate mode checkboxes
   useEffect(() => {
     if (!productId) {
       setProduct(null);
@@ -72,29 +69,69 @@ export default function HostApp() {
     };
   }, [productId]);
 
-  // 构造 WebView URL（同源，相对路径）
-  const webviewUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (productId) params.set('product_id', productId);
-    if (selectedModes.length > 0) params.set('modes', selectedModes.join(','));
-    params.set('category', category);
-    params.set('theme', initialTheme);
-    return `/?${params.toString()}`;
-  }, [productId, selectedModes, category, initialTheme]);
+  // Build the init payload from current control-panel state
+  const buildInitPayload = useCallback(
+    (): InitPayload => ({
+      userToken: null,
+      theme,
+      safeAreaInsets: SAFE_AREA,
+      productId,
+      modes: selectedModes,
+      category,
+    }),
+    [productId, selectedModes, category, theme],
+  );
 
-  // 运行时注入主题 — 模拟 RN webview.injectJavaScript('window.__setTheme("dark")')
-  // 故意不改 initialTheme state，避免 iframe reload；只改视觉+记录
-  const injectTheme = (next: Theme) => {
-    const iframe = iframeRef.current;
-    const win = iframe?.contentWindow as WebViewWindow | null | undefined;
-    if (!win || typeof win.__setTheme !== 'function') {
-      alert(
-        'window.__setTheme 不可用。\n可能原因：\n1. iframe 还没加载完\n2. WebView 代码没挂载 __setTheme\n3. 跨域（不应该出现，都在同 origin）',
-      );
-      return;
-    }
-    win.__setTheme(next);
-    setLastInjected(next);
+  // Send a bridge message to the iframe WebView
+  const sendToWebView = useCallback(
+    (msg: { type: string; data?: unknown }) => {
+      const iframe = iframeRef.current;
+      if (!iframe?.contentWindow) return;
+      iframe.contentWindow.postMessage(JSON.stringify(msg), '*');
+      setLastBridgeEvent(`→ ${msg.type}`);
+    },
+    [],
+  );
+
+  // Listen for outbound messages from the iframe (ready / navigate-back / auth-required)
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      try {
+        const raw =
+          typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (!raw?.type) return;
+
+        setLastBridgeEvent(`← ${raw.type}`);
+
+        if (raw.type === 'ready') {
+          // WebView mounted — send init
+          sendToWebView({ type: 'init', data: buildInitPayload() });
+        }
+      } catch {
+        // Ignore non-bridge messages (e.g. Vite HMR)
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [buildInitPayload, sendToWebView]);
+
+  // When control-panel state changes, re-send init to reload the WebView
+  // content without rebuilding the iframe. We use a counter-key to force
+  // iframe recreation so the bridge handshake restarts cleanly.
+  const [iframeKey, setIframeKey] = useState(0);
+  const reloadWebView = useCallback(() => {
+    setIframeKey((k) => k + 1);
+  }, []);
+
+  // Reload iframe when product / modes / category / theme change
+  useEffect(() => {
+    reloadWebView();
+  }, [productId, selectedModes, category, theme, reloadWebView]);
+
+  // Runtime theme injection via shared-data-update (doesn't reload iframe)
+  const injectThemeUpdate = (next: ThemeMode) => {
+    sendToWebView({ type: 'shared-data-update', data: { theme: next } });
+    setLastBridgeEvent(`→ shared-data-update (theme: ${next})`);
   };
 
   return (
@@ -103,9 +140,8 @@ export default function HostApp() {
         <header>
           <h1 className="text-base font-bold tracking-tight">宿主仿真</h1>
           <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-            模拟合作方 RN App 把听感数据 WebView 嵌进去的运行环境。
-            <br />
-            URL 参数由下面的控件构造，iframe 的 src 即为合作方构造 WebView URL 时的值。
+            模拟合作方 RN App。控件变更会通过 <code>postMessage</code>{' '}
+            bridge 推送到 iframe WebView（和真实 RN 行为一致）。
           </p>
         </header>
 
@@ -122,72 +158,54 @@ export default function HostApp() {
 
         <section>
           <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-            初始主题（URL 参数）
+            初始主题（init payload）
           </h2>
           <div className="flex gap-2">
-            <ThemeChip
-              active={initialTheme === 'light'}
-              onClick={() => setInitialTheme('light')}
-            >
+            <ThemeChip active={theme === 'light'} onClick={() => setTheme('light')}>
               light
             </ThemeChip>
-            <ThemeChip
-              active={initialTheme === 'dark'}
-              onClick={() => setInitialTheme('dark')}
-            >
+            <ThemeChip active={theme === 'dark'} onClick={() => setTheme('dark')}>
               dark
             </ThemeChip>
           </div>
           <p className="mt-1.5 text-[10px] text-gray-400 leading-snug">
-            切换会重新加载 iframe，等同于 RN 重新打开 WebView 并在 URL 里带上 <code>?theme=</code>。
+            切换会重建 iframe → WebView 发 <code>ready</code> → 宿主回
+            <code>init</code> 带上新 theme。
           </p>
         </section>
 
         <section>
           <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-            运行时注入（<code>window.__setTheme</code>）
+            运行时注入（<code>shared-data-update</code>）
           </h2>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => injectTheme('light')}
+              onClick={() => injectThemeUpdate('light')}
               className="flex-1 px-3 py-2 rounded border border-gray-300 text-xs font-medium hover:bg-gray-50 active:bg-gray-100"
             >
-              __setTheme('light')
+              theme → light
             </button>
             <button
               type="button"
-              onClick={() => injectTheme('dark')}
+              onClick={() => injectThemeUpdate('dark')}
               className="flex-1 px-3 py-2 rounded border border-gray-300 text-xs font-medium hover:bg-gray-50 active:bg-gray-100"
             >
-              __setTheme('dark')
+              theme → dark
             </button>
           </div>
           <p className="mt-1.5 text-[10px] text-gray-400 leading-snug">
-            不会 reload iframe，模拟 RN 用 <code>webview.injectJavaScript()</code> 运行时切换。
+            不会 reload iframe，发 <code>shared-data-update</code> 让 WebView 运行时切主题。
           </p>
-          {lastInjected && (
-            <p className="mt-1 text-[10px] text-emerald-600">
-              已注入：<code>__setTheme('{lastInjected}')</code>
-            </p>
-          )}
         </section>
 
         <section className="mt-auto">
           <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-            当前 WebView URL
+            Bridge 日志
           </h2>
-          <pre className="text-[10px] bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all font-mono">
-{webviewUrl}
-          </pre>
-          <a
-            href={webviewUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1.5 inline-block text-[10px] text-blue-600 hover:underline"
-          >
-            在新标签页打开 ↗
-          </a>
+          <p className="text-[10px] font-mono text-gray-500">
+            {lastBridgeEvent ?? '(等待 WebView ready)'}
+          </p>
         </section>
       </aside>
 
@@ -197,10 +215,13 @@ export default function HostApp() {
             product={product}
             activeMainTab={activeMainTab}
             onMainTabChange={setActiveMainTab}
-            webviewUrl={webviewUrl}
+            iframeKey={iframeKey}
             iframeRef={iframeRef}
             selectedModes={selectedModes}
-            onSelectedModesChange={setSelectedModes}
+            onSelectedModesChange={(modes) => {
+              setSelectedModes(modes);
+              // Mode change triggers iframe reload via useEffect above
+            }}
           />
         </PhoneFrame>
       </main>
