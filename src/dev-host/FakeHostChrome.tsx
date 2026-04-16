@@ -19,6 +19,7 @@ interface Props {
   onMainTabChange: (tab: MainTab) => void;
   iframeKey: number;
   iframeRef: RefObject<HTMLIFrameElement | null>;
+  iframeSrc: string;
   selectedModes: string[];
   onSelectedModesChange: (modes: string[]) => void;
 }
@@ -31,6 +32,7 @@ export function FakeHostChrome({
   onMainTabChange,
   iframeKey,
   iframeRef,
+  iframeSrc,
   selectedModes,
   onSelectedModesChange,
 }: Props) {
@@ -161,7 +163,7 @@ export function FakeHostChrome({
           <iframe
             key={iframeKey}
             ref={iframeRef}
-            src="/"
+            src={iframeSrc}
             className="w-full h-full border-0 block"
             title="听感数据 WebView"
           />

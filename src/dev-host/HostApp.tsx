@@ -6,6 +6,12 @@ import { ProductControls } from './ProductControls';
 
 const DEFAULT_PRODUCT_ID = '7230fa92-72c5-4a8c-a369-6440413cd6c1';
 
+const ENVIRONMENTS = [
+  { id: 'local', label: '本地', src: '/' },
+  { id: 'production', label: '生产', src: 'https://eval.huihifi.com/m/' },
+] as const;
+type EnvId = (typeof ENVIRONMENTS)[number]['id'];
+
 interface Product {
   uuid: string;
   title: string;
@@ -22,6 +28,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 const SAFE_AREA = { top: 47, right: 0, bottom: 34, left: 0 };
 
 export default function HostApp() {
+  const [env, setEnv] = useState<EnvId>('local');
   const [productId, setProductId] = useState(DEFAULT_PRODUCT_ID);
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedModes, setSelectedModes] = useState<string[]>([]);
@@ -30,6 +37,8 @@ export default function HostApp() {
   const [lastBridgeEvent, setLastBridgeEvent] = useState<string | null>(null);
   const [productError, setProductError] = useState<string | null>(null);
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('perception');
+
+  const iframeSrc = ENVIRONMENTS.find((e) => e.id === env)!.src;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -123,10 +132,10 @@ export default function HostApp() {
     setIframeKey((k) => k + 1);
   }, []);
 
-  // Reload iframe when product / modes / category / theme change
+  // Reload iframe when product / modes / category / theme / env change
   useEffect(() => {
     reloadWebView();
-  }, [productId, selectedModes, category, theme, reloadWebView]);
+  }, [productId, selectedModes, category, theme, env, reloadWebView]);
 
   // Runtime theme injection via shared-data-update (doesn't reload iframe)
   const injectThemeUpdate = (next: ThemeMode) => {
@@ -141,9 +150,38 @@ export default function HostApp() {
           <h1 className="text-base font-bold tracking-tight">宿主仿真</h1>
           <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
             模拟合作方 RN App。控件变更会通过 <code>postMessage</code>{' '}
-            bridge 推送到 iframe WebView（和真实 RN 行为一致）。
+            bridge 推送到 iframe WebView。
           </p>
         </header>
+
+        <section>
+          <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+            WebView 环境
+          </h2>
+          <div className="flex gap-2">
+            {ENVIRONMENTS.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setEnv(e.id)}
+                className={`flex-1 px-3 py-2 rounded text-xs font-semibold transition-colors ${
+                  env === e.id
+                    ? 'bg-black text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-gray-400 leading-snug">
+            {env === 'local' ? (
+              <>iframe → <code>/</code> (localhost vite dev server)</>
+            ) : (
+              <>iframe → <code>eval.huihifi.com/m/</code> (Zeabur 生产)</>
+            )}
+          </p>
+        </section>
 
         <ProductControls
           productId={productId}
@@ -217,10 +255,10 @@ export default function HostApp() {
             onMainTabChange={setActiveMainTab}
             iframeKey={iframeKey}
             iframeRef={iframeRef}
+            iframeSrc={iframeSrc}
             selectedModes={selectedModes}
             onSelectedModesChange={(modes) => {
               setSelectedModes(modes);
-              // Mode change triggers iframe reload via useEffect above
             }}
           />
         </PhoneFrame>
