@@ -12,5 +12,14 @@ export default defineConfig({
   server: {
     host: true,
     port: 5174,
+    proxy: {
+      // Dev-only: forward /api/* to the locally running huihifi-eval-api
+      // (started via portless on eval-api.localhost:1355). Avoids needing
+      // to set VITE_API_BASE_URL or deal with CORS.
+      '/api': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
+    },
   },
 })

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchProductWithModes, PRODUCT_NOT_FOUND } from './api/client';
+import { fetchPairs, PRODUCT_NOT_FOUND } from './api/client';
 import { useBridge } from './bridge';
 import { BarChart } from './components/BarChart';
 import { ErrorState } from './components/ErrorState';
 import { LoadingState } from './components/LoadingState';
 import { SubTabBar } from './components/SubTabBar';
 import { SUB_TABS, type SubTabId } from './constants';
-import type { ErrorKind, FetchResult, ModeData, ScoreItem } from './types';
+import type { ErrorKind, FetchResult, PairData, ScoreItem } from './types';
 
 interface AppError {
   kind: ErrorKind;
@@ -19,6 +19,10 @@ function toAppError(e: unknown): AppError {
   return { kind: 'network', message: msg };
 }
 
+function pairKey(p: { productId: string; tuningMode: string }): string {
+  return `${p.productId}::${p.tuningMode}`;
+}
+
 export default function App() {
   const bridge = useBridge();
 
@@ -26,10 +30,9 @@ export default function App() {
   const [error, setError] = useState<AppError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<SubTabId>(bridge.category);
-  const [selectedModes, setSelectedModes] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
-    if (!bridge.productId) {
+    if (bridge.products.length === 0) {
       setError({ kind: 'missing-param' });
       setIsLoading(false);
       return;
@@ -37,16 +40,18 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const modes = bridge.modes.length > 0 ? bridge.modes : null;
-      const result = await fetchProductWithModes(bridge.productId, modes);
-      setData(result);
-      setSelectedModes(result.modes.map((m) => m.tuningMode));
+      const result = await fetchPairs(bridge.products);
+      if (result.pairs.length === 0) {
+        setError({ kind: 'not-found' });
+      } else {
+        setData(result);
+      }
     } catch (e: unknown) {
       setError(toAppError(e));
     } finally {
       setIsLoading(false);
     }
-  }, [bridge.productId, bridge.modes]);
+  }, [bridge.products]);
 
   // Fetch when bridge becomes ready (init received or URL fallback)
   useEffect(() => {
@@ -60,56 +65,47 @@ export default function App() {
   }, [bridge.isReady, bridge.category]);
 
   const availability = useMemo<Partial<Record<SubTabId, boolean>>>(() => {
-    if (!data || selectedModes.length === 0) return {};
-    const selected = selectedModes
-      .map((name) => data.modes.find((m) => m.tuningMode === name))
-      .filter((m): m is ModeData => m !== undefined);
-
+    if (!data) return {};
     const result: Partial<Record<SubTabId, boolean>> = {};
     for (const tab of SUB_TABS) {
-      result[tab.id] = selected.some((m) => {
-        const arr = m.scores[tab.sheetKey];
+      result[tab.id] = data.pairs.some((p) => {
+        const arr = p.scores[tab.sheetKey];
         return Array.isArray(arr) && arr.length > 0;
       });
     }
     return result;
-  }, [data, selectedModes]);
+  }, [data]);
 
   const dimensions = useMemo(() => {
     if (!data) return [];
     const sheetKey = SUB_TABS.find((t) => t.id === activeCategory)?.sheetKey;
     if (!sheetKey) return [];
 
-    const modeIndex = new Map(data.modes.map((m) => [m.tuningMode, m]));
-    const perMode = selectedModes
-      .map((name) => modeIndex.get(name))
-      .filter((m): m is ModeData => m !== undefined)
-      .map((m) => ({
-        tuningMode: m.tuningMode,
-        byName: new Map<string, ScoreItem>(
-          (m.scores[sheetKey] ?? []).map((s) => [s.name, s]),
-        ),
-      }));
+    const perPair = data.pairs.map((p) => ({
+      pair: p,
+      byName: new Map<string, ScoreItem>(
+        (p.scores[sheetKey] ?? []).map((s) => [s.name, s]),
+      ),
+    }));
 
-    if (perMode.length === 0) return [];
+    if (perPair.length === 0) return [];
 
-    const canonical = perMode.find((p) => p.byName.size > 0);
+    // Pick the first pair with non-empty data as the dimension template
+    // (so axis labels and freq ranges come from real data).
+    const canonical = perPair.find((p) => p.byName.size > 0);
     if (!canonical) return [];
 
-    const canonicalMode = data.modes.find(
-      (m) => m.tuningMode === canonical.tuningMode,
-    );
-    const canonicalDims = canonicalMode?.scores[sheetKey] ?? [];
+    const canonicalDims = canonical.pair.scores[sheetKey] ?? [];
 
     return canonicalDims.map((canon) => ({
       name: canon.name,
       range: canon.range,
-      modeScores: perMode.map(({ tuningMode, byName }) => ({
-        tuningMode,
+      pairScores: perPair.map(({ pair, byName }) => ({
+        key: pairKey(pair),
         score: byName.get(canon.name)?.score ?? 0,
       })),
     }));
-  }, [data, activeCategory, selectedModes]);
+  }, [data, activeCategory]);
 
   // Wait for bridge to be ready before showing anything
   if (!bridge.isReady || isLoading) {
@@ -162,7 +158,7 @@ export default function App() {
                   key={dim.name}
                   dimensionName={dim.name}
                   freqRange={dim.range}
-                  modeScores={dim.modeScores}
+                  pairScores={dim.pairScores}
                 />
               ))}
             </div>
@@ -172,3 +168,6 @@ export default function App() {
     </div>
   );
 }
+
+// Re-exported for any external consumer that imports types alongside App.
+export type { PairData };

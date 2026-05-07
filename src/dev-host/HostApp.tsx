@@ -78,14 +78,17 @@ export default function HostApp() {
     };
   }, [productId]);
 
-  // Build the init payload from current control-panel state
+  // Build the init payload from current control-panel state.
+  // Uses the canonical `products: [...]` form (PC-aligned). Single
+  // product here, but the schema supports multiple groups.
   const buildInitPayload = useCallback(
     (): InitPayload => ({
       userToken: null,
       theme,
       safeAreaInsets: SAFE_AREA,
-      productId,
-      modes: selectedModes,
+      products: productId
+        ? [{ productId, modes: selectedModes }]
+        : [],
       category,
     }),
     [productId, selectedModes, category, theme],

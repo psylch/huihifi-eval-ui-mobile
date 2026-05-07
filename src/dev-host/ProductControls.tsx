@@ -151,7 +151,7 @@ export function ProductControls({
             })}
           </div>
           <p className="mt-1 text-[10px] text-gray-400">
-            RN 侧构造 URL 时通过 <code>?modes=a,b,c</code> 传入。最后一个无法取消（至少保留 1 个）。
+            URL 构造形态：<code>?p1=&lt;uuid&gt;&amp;m1=a,b,c</code>（PC 对齐）。最后一个无法取消（至少保留 1 个）。
           </p>
         </section>
       )}

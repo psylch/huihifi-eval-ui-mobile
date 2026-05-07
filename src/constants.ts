@@ -53,8 +53,17 @@ export const INDICATOR_STYLES = [
   { shape: 'filled' as const },
   { shape: 'outline' as const },
   { shape: 'diamond' as const },
+  { shape: 'square' as const },
+  { shape: 'square-outline' as const },
 ] as const;
 
 export type IndicatorShape = (typeof INDICATOR_STYLES)[number]['shape'];
 
-export const MAX_SELECTED_MODES = 3;
+// Maximum number of (product, mode) pairs the WebView will render at once.
+// Aligned with the PC microapp contract (huihifi-eval-ui) so a single
+// integration doc covers both. Each pair gets one INDICATOR_STYLES slot.
+export const MAX_PAIRS = 5;
+
+// Legacy alias — kept temporarily so any old call sites keep compiling.
+// New code should use MAX_PAIRS.
+export const MAX_SELECTED_MODES = MAX_PAIRS;

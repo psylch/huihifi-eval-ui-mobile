@@ -1,5 +1,6 @@
-import { MAX_SELECTED_MODES } from '../constants';
-import type { FetchResult, ModeData, ProductDetail } from '../types';
+import { MAX_PAIRS } from '../constants';
+import type { ProductInput } from '../bridge/types';
+import type { FetchResult, PairData, ProductDetail } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -22,63 +23,73 @@ export async function getProductDetail(
   return res.json() as Promise<ProductDetail>;
 }
 
-// Fetch a product across one or more tuning modes and merge the results.
-// - `requestedModes === null` → use the API default (first available mode).
-// - otherwise → keep only modes present in `availableTuningModes`, cap at
-//   MAX_SELECTED_MODES, silently drop unknown entries. If filtering produces
-//   an empty list, fall back to the default mode.
-//
-// The first network call doubles as the source of `availableTuningModes` and
-// is reused for whichever mode the API returned, avoiding a duplicate fetch.
-export async function fetchProductWithModes(
-  productId: string,
-  requestedModes: string[] | null,
-): Promise<FetchResult> {
-  const initial = await getProductDetail(productId);
+// Fetch one (product, mode) pair, reusing a shared per-product cache so
+// the first call for each product doubles as the source of truth for
+// `availableTuningModes` and the default mode.
+async function resolveProductModes(
+  product: ProductInput,
+  productCache: Map<string, ProductDetail>,
+  pairs: PairData[],
+  remainingBudgetRef: { value: number },
+): Promise<void> {
+  if (remainingBudgetRef.value <= 0) return;
+
+  const initial =
+    productCache.get(product.productId) ??
+    (await getProductDetail(product.productId));
+  productCache.set(product.productId, initial);
   const available = initial.availableTuningModes;
 
+  const requested = product.modes.length > 0 ? product.modes : null;
   let targetModes: string[];
-  if (requestedModes === null) {
+  if (requested === null) {
     targetModes = [available[0]];
   } else {
-    const filtered = requestedModes
-      .filter((m) => available.includes(m))
-      .slice(0, MAX_SELECTED_MODES);
+    const filtered = requested.filter((m) => available.includes(m));
     targetModes = filtered.length > 0 ? filtered : [available[0]];
   }
 
-  const cache = new Map<string, ModeData>();
-  cache.set(initial.tuningMode, {
-    tuningMode: initial.tuningMode,
-    scores: initial.scores,
-  });
+  // Honor the global pair budget — earlier products may have already
+  // consumed slots.
+  targetModes = targetModes.slice(0, remainingBudgetRef.value);
 
-  const missing = targetModes.filter((m) => !cache.has(m));
-  const fetched = await Promise.all(
-    missing.map(async (mode) => {
-      const detail = await getProductDetail(productId, mode);
-      return {
-        tuningMode: detail.tuningMode,
-        scores: detail.scores,
-      } satisfies ModeData;
-    }),
-  );
-  for (const item of fetched) {
-    cache.set(item.tuningMode, item);
+  // Per-mode fetch cache so repeated mode names don't double-fetch.
+  const modeCache = new Map<string, ProductDetail>();
+  modeCache.set(initial.tuningMode, initial);
+
+  for (const mode of targetModes) {
+    if (!modeCache.has(mode)) {
+      const detail = await getProductDetail(product.productId, mode);
+      modeCache.set(detail.tuningMode, detail);
+    }
+    const detail = modeCache.get(mode);
+    if (!detail) continue;
+    pairs.push({
+      productId: initial.uuid,
+      productTitle: initial.title,
+      brand: initial.brand,
+      tuningMode: detail.tuningMode,
+      scores: detail.scores,
+      availableTuningModes: available,
+    });
+    remainingBudgetRef.value -= 1;
+  }
+}
+
+// Resolve a list of `ProductInput` groups into a flat array of
+// `PairData`. Total pair count is capped at MAX_PAIRS even if upstream
+// caps got bypassed.
+export async function fetchPairs(
+  products: ProductInput[],
+): Promise<FetchResult> {
+  const pairs: PairData[] = [];
+  const productCache = new Map<string, ProductDetail>();
+  const remainingBudgetRef = { value: MAX_PAIRS };
+
+  for (const product of products) {
+    if (remainingBudgetRef.value <= 0) break;
+    await resolveProductModes(product, productCache, pairs, remainingBudgetRef);
   }
 
-  const modes: ModeData[] = targetModes
-    .map((m) => cache.get(m))
-    .filter((m): m is ModeData => m !== undefined);
-
-  return {
-    product: {
-      uuid: initial.uuid,
-      title: initial.title,
-      brand: initial.brand,
-      categoryName: initial.categoryName,
-      availableTuningModes: available,
-    },
-    modes,
-  };
+  return { pairs };
 }

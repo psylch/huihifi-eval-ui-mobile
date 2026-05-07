@@ -187,6 +187,19 @@ body {
   border-radius: 2px;
   transform: translate(-50%, -50%) rotate(45deg);
 }
+.bar-indicator.square {
+  width: 10px;
+  height: 10px;
+  background: var(--accent-primary);
+  border-radius: 2px;
+}
+.bar-indicator.square-outline {
+  width: 10px;
+  height: 10px;
+  background: var(--bg-surface);
+  border: 2.5px solid var(--accent-secondary);
+  border-radius: 2px;
+}
 
 /* ============================================================
    动画

@@ -1,8 +1,8 @@
 # 听感数据 WebView 接入指南
 
 > **适用对象**：合作方 RN 开发者
-> **版本**：v1.0
-> **更新日期**：2026-04-15
+> **版本**：v2.0（与 PC 微应用 `huihifi-eval-ui` 参数对齐）
+> **更新日期**：2026-05-06
 
 ---
 
@@ -85,17 +85,26 @@ interface InitPayload {
   };
 
   // ─── 听感评估专用 ───
-  productId: string;               // 产品 UUID
-  modes: string[];                 // 要展示的调音模式列表（最多 3 个）
+  // 与 PC 微应用 (huihifi-eval-ui) ProductInput[] 同形态：N 个产品，
+  // 每个产品带自己的调音模式列表。所有 (产品, 模式) pair 总数最多 5。
+  products: Array<{
+    productId: string;
+    modes: string[];               // 空数组 = 用 API 返回的第一个模式
+  }>;
   category?: string;               // 默认打开的子 Tab（可选，默认 'frequency'）
+
+  // ─── 旧字段（v1 兼容，新接入请用 products）───
+  productId?: string;              // 等同 products: [{productId, modes}]
+  modes?: string[];
 }
 ```
 
-**`modes` 规则**：
-- 空数组 `[]` → 自动展示 API 返回的第一个调音模式
-- 1-3 个值 → 多模式条形图对比（实心圆/空心圆/菱形）
-- 超过 3 个 → 只取前 3 个
-- 不在产品可用模式列表中的值 → 静默丢弃
+**`products` 规则**：
+- 空 `[]` → 显示「参数缺失」错误页
+- 每个产品的 `modes` 为空数组 → 自动用 API 返回的第一个模式（占 1 个 pair 槽）
+- 总 pair 数（所有产品的模式数累加）超过 5 → 只保留前 5 对
+- 不在产品可用模式列表中的模式名 → 静默丢弃，丢光后回落到第一个可用模式
+- 指示形状（按 pair 顺序）：实心圆 / 空心圆 / 菱形 / 实心方 / 空心方
 
 **`category` 可选值**：
 
@@ -144,12 +153,12 @@ import { useColorScheme } from 'react-native';
 const WEBVIEW_URL = 'https://eval.huihifi.com/m/';
 
 interface Props {
-  productId: string;
-  modes: string[];          // 宿主侧调音模式选择器的当前选中
+  // 多产品对比时直接传完整列表；单产品场景就传一个元素
+  products: Array<{ productId: string; modes: string[] }>;
   category?: string;
 }
 
-export function PerceptionWebView({ productId, modes, category }: Props) {
+export function PerceptionWebView({ products, category }: Props) {
   const webViewRef = useRef<WebView>(null);
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -167,13 +176,12 @@ export function PerceptionWebView({ productId, modes, category }: Props) {
           bottom: insets.bottom,
           left: insets.left,
         },
-        productId,
-        modes,
+        products,
         category: category ?? 'frequency',
       },
     };
     webViewRef.current?.postMessage(JSON.stringify(payload));
-  }, [colorScheme, insets, productId, modes, category]);
+  }, [colorScheme, insets, products, category]);
 
   const handleMessage = useCallback(
     (event: { nativeEvent: { data: string } }) => {
@@ -234,7 +242,10 @@ useEffect(() => {
 
 ```tsx
 // 方案 A：用 key 强制重建
-<WebView key={`${productId}-${modes.join(',')}`} ... />
+<WebView
+  key={products.map(p => `${p.productId}:${p.modes.join(',')}`).join('|')}
+  ...
+/>
 
 // 方案 B：重新发 init（需要 WebView 端支持 re-init）
 // 当前推荐方案 A，简单可靠
@@ -276,16 +287,34 @@ WebView 内部通过 `padding-top: var(--sai-top)` 等方式消费。**宿主不
 
 ## 8. URL Fallback 模式
 
-开发/调试时可以**不走 bridge**，直接在浏览器打开带参数的 URL：
+开发/调试时可以**不走 bridge**，直接在浏览器打开带参数的 URL。三种格式同时支持，按下面的优先级解析：
+
+### 8.1 多产品 / 单产品（PC 对齐，推荐）
 
 ```
-https://eval.huihifi.com/m/?product_id=<uuid>&modes=<m1,m2,m3>&category=<tab_id>&theme=<light|dark>
+https://eval.huihifi.com/m/?p1=<uuid1>&m1=<m1,m2>&p2=<uuid2>&m2=<m3>&category=<tab_id>&theme=<light|dark>
+```
+
+- `pN` / `mN`：第 N 个产品的 UUID 与逗号分隔的调音模式列表（N 从 1 开始）
+- 所有 (产品, 模式) pair 总数 ≤ 5，超出按声明顺序丢弃尾部
+- `mN` 缺省 → 该产品用 API 返回的第一个模式
+
+### 8.2 单产品简写（PC 对齐）
+
+```
+?product=<uuid>&mode=<m1,m2>
+```
+
+### 8.3 旧版（v1 兼容，仍可工作）
+
+```
+?product_id=<uuid>&modes=<m1,m2,m3>
 ```
 
 | 参数 | 必填 | 默认 |
 |---|---|---|
-| `product_id` | ✅ | — |
-| `modes` | ❌ | API 返回的第一个模式 |
+| `p1` / `product` / `product_id`（任一）| ✅ | — |
+| `m1` / `mode` / `modes` | ❌ | API 第一个模式 |
 | `category` | ❌ | `frequency` |
 | `theme` | ❌ | `light` |
 
@@ -339,11 +368,13 @@ WebView 内部处理以下错误，不需要宿主干预：
 - [ ] `init.safeAreaInsets` 传入真实值（`useSafeAreaInsets()`）
 - [ ] 确认 WebView 顶部内容没被刘海/状态栏遮挡
 
-### 第五步：多模式对比
+### 第五步：多模式 / 多产品对比
 
-- [ ] `modes` 传 1 个 → 单条 axis
-- [ ] `modes` 传 2 个 → 双条 axis（实心圆 + 空心圆）
-- [ ] `modes` 传 3 个 → 三条 axis（实心圆 + 空心圆 + 菱形）
+- [ ] 1 个 pair → 单条 axis（实心圆）
+- [ ] 2 个 pair → 双条 axis（实心圆 + 空心圆）
+- [ ] 3 个 pair → 三条 axis（+ 菱形）
+- [ ] 4-5 个 pair → 加上 实心方 / 空心方
+- [ ] 多产品 (`p1=&m1=&p2=&m2=`) 同时存在 → 同一图上比对
 
 ### 第六步：子 Tab 切换
 

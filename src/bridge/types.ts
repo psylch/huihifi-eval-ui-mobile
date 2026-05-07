@@ -12,15 +12,25 @@ export interface SafeAreaInsets {
   left: number;
 }
 
+// A (product, modes) group — one product with one-or-more tuning modes.
+// Mirrors huihifi-eval-ui `ProductInput` so PC and mobile share one schema.
+export interface ProductInput {
+  productId: string;
+  modes: string[];
+}
+
 // ====== Inbound (RN host → WebView) ======
 
 export interface InitPayload {
   userToken: string | null;
   theme: ThemeMode;
   safeAreaInsets: SafeAreaInsets;
-  // Eval-specific (replaces URL ?product_id=&modes=&category=)
-  productId: string;
-  modes: string[];
+  // Eval-specific. `products` is the canonical form (aligned with PC
+  // microapp). `productId` + `modes` are accepted as a legacy single-
+  // product shortcut and converted on receipt.
+  products?: ProductInput[];
+  productId?: string;
+  modes?: string[];
   category?: string;
 }
 

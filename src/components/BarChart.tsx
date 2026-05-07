@@ -1,16 +1,18 @@
 import { INDICATOR_STYLES, SCORE_RANGE, ZONES } from '../constants';
 
-interface ModeScore {
-  tuningMode: string;
+interface PairScore {
+  // Stable composite key (productId::tuningMode). React-friendly and
+  // collision-free when two products share a mode name.
+  key: string;
   score: number;
 }
 
 interface BarChartProps {
   dimensionName: string;
   freqRange: string;
-  // Order matches `selectedModes` / `INDICATOR_STYLES` so index N always
-  // gets the Nth indicator style.
-  modeScores: ModeScore[];
+  // Order matches the resolved pair order so index N always gets the
+  // Nth INDICATOR_STYLES slot.
+  pairScores: PairScore[];
 }
 
 const clamp = (x: number, min: number, max: number): number =>
@@ -27,7 +29,7 @@ function scoreToPosition(score: number): number {
 export function BarChart({
   dimensionName,
   freqRange,
-  modeScores,
+  pairScores,
 }: BarChartProps) {
   return (
     <div
@@ -52,13 +54,13 @@ export function BarChart({
       </div>
 
       <div className="flex flex-col gap-2.5 mt-2">
-        {modeScores.map((ms, index) => {
+        {pairScores.map((ps, index) => {
           const style = INDICATOR_STYLES[index] ?? INDICATOR_STYLES[0];
-          const position = scoreToPosition(ms.score);
+          const position = scoreToPosition(ps.score);
 
           return (
             <div
-              key={ms.tuningMode}
+              key={ps.key}
               className="bar-axis rounded-full"
             >
               <span

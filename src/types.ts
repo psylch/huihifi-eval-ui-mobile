@@ -25,28 +25,29 @@ export interface ProductDetail {
 export type Theme = 'light' | 'dark';
 
 import type { SubTabId } from './constants';
+import type { ProductInput } from './bridge/types';
 
 export interface UrlParams {
-  productId: string;
-  // null = caller did not specify; fall back to API default tuning mode.
-  // non-null = explicit list, already capped to MAX_SELECTED_MODES entries.
-  modes: string[] | null;
+  // Canonical (product, modes) groups parsed from URL. Empty `modes` for
+  // a product means "use API default mode" (consumes one pair slot).
+  // Already capped to MAX_PAIRS pair slots in total.
+  products: ProductInput[];
   category: SubTabId;
   theme: Theme;
 }
 
-export interface ModeData {
+// One resolved (product, mode) data point — what the BarChart row maps to.
+export interface PairData {
+  productId: string;
+  productTitle: string;
+  brand: Brand;
   tuningMode: string;
   scores: Record<string, ScoreItem[]>;
+  // Per-product available modes — kept on each pair for convenience even
+  // though it's the same for sibling pairs of the same product.
+  availableTuningModes: string[];
 }
 
 export interface FetchResult {
-  product: {
-    uuid: string;
-    title: string;
-    brand: Brand;
-    categoryName: string;
-    availableTuningModes: string[];
-  };
-  modes: ModeData[];
+  pairs: PairData[];
 }
