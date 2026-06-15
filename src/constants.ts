@@ -22,26 +22,30 @@ export type SubTabId = (typeof SUB_TABS)[number]['id'];
 
 // position% = 50 + (score / SCORE_RANGE) * 50
 // score = ±SCORE_RANGE → 0% / 100%; score = 0 → 50% (VDSF baseline).
-// Aligned with the ranking v3 zone axis (±6 dB — `very_high` upper edge
-// at +6 and `very_low` lower edge at −6). See ZONES below and
-// docs/decisions/D006-five-zone-scoring-modes.md.
+// Aligned with the ranking zone axis (±6 dB — `excessive_high` upper edge
+// at +6 and `excessive_low` lower edge at −6). See ZONES below and
+// docs/decisions/D008 (9-tier severity scheme).
 export const SCORE_RANGE = 6;
 
 // Preference zones mirror the ranking backend (formula_parser.py
-// ZONE_CENTERS). Each zone is an absolute dB range on the relative-to-
-// VDSF scale, used to render a mini color ruler under every BarChart so
-// users can see which preference bucket an indicator falls into.
+// ZONE_CENTERS, 9-tier severity scheme — see docs/decisions/D008). Each zone
+// is an absolute dB band on the relative-to-VDSF scale, used to render a mini
+// color ruler under every BarChart so users can see which severity bucket an
+// indicator falls into.
 //
-// Zones are asymmetric in width: neutral is widest (±1.5), the outer
-// zones are 2.5 dB wide, middle zones are 2.0 dB wide. Colors match
-// huihifi-eval-ui RankingPage ZONES so cross-feature semantics stay
-// consistent: red = very_high, blue = very_low.
+// Magnitude bands: 中性 ±0.75 / 轻度 ±1.5 / 明显 ±2.5 / 重度 ±3.5 / 过度 >±3.5.
+// Signed → 9 zones. Colors match huihifi-eval-ui RankingPage ZONES so
+// cross-feature semantics stay consistent: warm = 偏高, cool = 偏低.
 export const ZONES = [
-  { key: 'very_low', label: '很低', min: -SCORE_RANGE, max: -3.5, color: '#60A5FA' },
-  { key: 'low', label: '稍低', min: -3.5, max: -1.5, color: '#22D3EE' },
-  { key: 'neutral', label: '中性', min: -1.5, max: 1.5, color: '#9CA3AF' },
-  { key: 'high', label: '稍高', min: 1.5, max: 3.5, color: '#FB923C' },
-  { key: 'very_high', label: '很高', min: 3.5, max: SCORE_RANGE, color: '#F87171' },
+  { key: 'excessive_low', label: '过度(低)', min: -SCORE_RANGE, max: -3.5, color: '#60A5FA' },
+  { key: 'severe_low', label: '重度(低)', min: -3.5, max: -2.5, color: '#38BDF8' },
+  { key: 'obvious_low', label: '明显(低)', min: -2.5, max: -1.5, color: '#22D3EE' },
+  { key: 'mild_low', label: '轻度(低)', min: -1.5, max: -0.75, color: '#67E8F9' },
+  { key: 'neutral', label: '中性', min: -0.75, max: 0.75, color: '#9CA3AF' },
+  { key: 'mild_high', label: '轻度(高)', min: 0.75, max: 1.5, color: '#FBBF24' },
+  { key: 'obvious_high', label: '明显(高)', min: 1.5, max: 2.5, color: '#FB923C' },
+  { key: 'severe_high', label: '重度(高)', min: 2.5, max: 3.5, color: '#F97316' },
+  { key: 'excessive_high', label: '过度(高)', min: 3.5, max: SCORE_RANGE, color: '#F87171' },
 ] as const;
 
 export type ZoneKey = (typeof ZONES)[number]['key'];
